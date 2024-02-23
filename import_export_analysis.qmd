@@ -1,0 +1,133 @@
+---
+title: "fred_analysis"
+format: html
+editor: visual
+---
+
+dr::fredr_release("A639RX1Q020SBEA")
+
+search_results
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(fredr)
+library(ggthemes)
+
+
+fredr_set_key("3f279f02c757808ef45fa93d58384232")
+
+ids_to_filter <- fredr::fredr_series_search_text("supply chain") %>% 
+  arrange(popularity) %>% 
+  filter(frequency_short == "Q") %>% 
+  filter(str_detect(title,"Real")) %>% 
+  filter(!str_detect(title,"index")) %>% 
+  filter(title %in% c("Real exports of goods: Industrial supplies and materials",
+                      "Real Imports of goods: Industrial supplies and materials")) %>%
+  pull(id) 
+
+#ids_to_filter
+
+df1 <- fredr(
+  series_id = "A639RX1Q020SBEA",
+  observation_start = as.Date("1990-01-01"),
+  observation_end = as.Date("2024-01-01"))
+
+df2 <- fredr(
+  series_id = "LB0000041Q020SBEA",
+  observation_start = as.Date("1990-01-01"),
+  observation_end = as.Date("2024-01-01"))
+
+df3 <- bind_rows(df1,df2)
+
+
+df3 %>% 
+  drop_na() %>% 
+  mutate(Title = case_when(
+    series_id == "A639RX1Q020SBEA" ~ "Exports",
+    series_id == "LB0000041Q020SBEA" ~ "Imports",
+    TRUE ~ "")) %>% 
+  select(date,value,Title) %>% 
+  ggplot(aes(
+    x=date,
+    y=value,
+    color=Title
+  ))+
+  #geom_smooth(se = FALSE)+
+  geom_line()+
+  ggthemes::theme_clean()+
+  labs(
+    title = "Exports vs Imports: United States"
+  )
+
+```
+
+```{r}
+
+recessions <- 
+  
+  fredr(
+      series_id = "USRECD",
+      observation_start = as.Date("1990-01-01"),
+      observation_end = as.Date("2024-01-01")) 
+
+
+transportation_employees <- fredr(
+  series_id = "CEU4348400001",
+  observation_start = as.Date("1990-01-01"),
+  observation_end = as.Date("2024-01-01"))
+
+
+transportation_employees_recession <- 
+  transportation_employees %>% 
+  inner_join(recessions,by = join_by(date)) %>% 
+  select(date,value.x,value.y) %>% 
+  rename(employees = value.x,
+         recession = value.y)
+
+
+
+transportation_employees_recession %>%
+  ggplot(aes(
+    x = date,
+    y = employees
+  )) +
+  geom_line() +
+  geom_rect(data = subset(transportation_employees_recession, recession == 1),
+            aes(xmin = date - 0.5, xmax = date + 0.5, ymin = -Inf, ymax = Inf),
+            fill = "darkred") +
+  theme_clean()+
+  labs(
+    title = "Trucking Employees: United States",
+    subtitle = "(With Recession Periods)",
+    x = "Date",
+    y = "Number of Employees (Thousands)"
+  )
+  
+```
+
+```{r}
+
+inventory_to_sales <- 
+  
+  fredr(
+      series_id = "TOTBUSIRNSA",
+      observation_start = as.Date("1990-01-01"),
+      observation_end = as.Date("2024-01-01")) %>% 
+  select(date,value) %>% 
+  rename(inv_sales_ratio = value)
+  
+
+inventory_to_sales
+
+
+transp_invsales <- 
+transportation_employees_recession %>% 
+  inner_join(inventory_to_sales,join_by(date)) %>% 
+  mutate(log_employees = log(employees + 1 )) %>% 
+  mutate(log_inv_sales = log(inv_sales_ratio + 1))
+
+
+# weak correlation: -.3
+cor(transp_invsales$employees,transp_invsales$log_inv_sales)
+```
