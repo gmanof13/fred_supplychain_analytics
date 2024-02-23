@@ -108,26 +108,23 @@ transportation_employees_recession %>%
 
 ```{r}
 
-inventory_to_sales <- 
+new_manuf_orders <- 
   
   fredr(
-      series_id = "TOTBUSIRNSA",
+      series_id = "UMDMNO",
       observation_start = as.Date("1990-01-01"),
       observation_end = as.Date("2024-01-01")) %>% 
   select(date,value) %>% 
-  rename(inv_sales_ratio = value)
+  rename(orders = value)
   
 
-inventory_to_sales
+new_manuf_orders_employees <- 
 
-
-transp_invsales <- 
 transportation_employees_recession %>% 
-  inner_join(inventory_to_sales,join_by(date)) %>% 
-  mutate(log_employees = log(employees + 1 )) %>% 
-  mutate(log_inv_sales = log(inv_sales_ratio + 1))
+  inner_join(new_manuf_orders,join_by(date)) 
 
 
-# weak correlation: -.3
-cor(transp_invsales$employees,transp_invsales$log_inv_sales)
+#high correlation
+cor(new_manuf_orders_employees$employees,new_manuf_orders_employees$orders)
+
 ```
